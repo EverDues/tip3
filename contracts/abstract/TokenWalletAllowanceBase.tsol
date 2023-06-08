@@ -1,0 +1,289 @@
+pragma ton-solidity >=0.57.0;
+
+pragma AbiHeader expire;
+pragma AbiHeader pubkey;
+
+pragma ignoreIntOverflow;
+
+import "./TokenWalletBase.tsol";
+import "../interfaces/ITokenRoot.tsol";
+import "../interfaces/IAllowanceTokenWallet.tsol";
+import "../interfaces/IAcceptTokensAllowanceCallback.tsol";
+import "../libraries/TokenErrors.tsol";
+import "../libraries/TokenMsgFlag.tsol";
+
+/**
+ * @dev Abstract contract that extends TokenWalletBase by adding allowance functionality.
+ * Allowance functionality is used to set a spending limit for a particular address.
+ * An owner of tokens can allow another address to spend up to a certain amount of tokens.
+ * In this contract, this functionality is achieved through the allowance mapping and related functions.
+ */
+abstract contract TokenWalletAllowanceBase is
+	TokenWalletBase,
+	IAllowanceTokenWallet
+{
+	/**
+	 * @dev Maximum allowable token amount
+	 */
+	uint128 constant MAX_TOKEN_AMOUNT = 2 ** 128 - 1;
+
+	/**
+	 * @dev RenewableAllowance is a struct to keep track of allowance details for each address.
+	 */
+	struct RenewableAllowance {
+		uint128 maxAmount; // Maximum allowable amount
+		uint128 remaining; // Remaining allowable amount
+		uint128 recoveryRate; // Rate at which the remaining allowance recovers (tokens per second)
+		uint64 lastUpdated; // Last updated timestamp
+	}
+
+	/**
+	 * @dev Mapping that stores the allowances of each spender.
+	 */
+	mapping(address => RenewableAllowance) public allowance_;
+
+	/**
+	 * @dev Modifier than throws if called by any account other than the pre-approved spender.
+	 */
+	modifier onlySpender() {
+		require(allowance_.exists(msg.sender), TokenErrors.NOT_SPENDER);
+		_;
+	}
+
+	/**
+	 * @dev This function increases the allowance for a spender. If the updated allowance is more than uint128,
+	 * it's set to the maximum allowable token amount. It then calls the approve function to set the new allowance.
+	 */
+	function increaseAllowance(
+		address spender,
+		uint128 amount,
+		address remaningGasTo,
+		bool notify,
+		TvmCell payload
+	) external override {
+		uint128 currentAllowance = allowance(spender);
+		uint128 updatedAllowance = currentAllowance + amount;
+		if (updatedAllowance > MAX_TOKEN_AMOUNT) {
+			updatedAllowance = MAX_TOKEN_AMOUNT;
+		}
+		_approve(spender, updatedAllowance, 0, remaningGasTo, notify, payload);
+	}
+
+	/**
+	 * @dev This function decreases the allowance for a spender. If the updated allowance is less than zero,
+	 * it's set to zero. It then calls the approve function to set the new allowance.
+	 */
+	function decreaseAllowance(
+		address spender,
+		uint128 amount,
+		address remaningGasTo,
+		bool notify,
+		TvmCell payload
+	) external override {
+		uint128 currentAllowance = allowance(spender);
+		uint128 updatedAllowance = currentAllowance - amount;
+		if (updatedAllowance < 0) {
+			updatedAllowance = 0;
+		}
+		_approve(spender, updatedAllowance, 0, remaningGasTo, notify, payload);
+	}
+
+	/**
+	 * @dev Similar to increaseAllowance function, but here we also consider the renewable allowance by adding recovery rate.
+	 */
+	function increaseAllowanceRenewable(
+		address spender,
+		uint128 amount,
+		uint128 recoveryRate,
+		address remaningGasTo,
+		bool notify,
+		TvmCell payload
+	) external override {
+		uint128 currentAllowance = allowance(spender);
+		uint128 updatedAllowance = currentAllowance + amount;
+		if (updatedAllowance > MAX_TOKEN_AMOUNT) {
+			updatedAllowance = MAX_TOKEN_AMOUNT;
+		}
+		_approve(
+			spender,
+			updatedAllowance,
+			recoveryRate,
+			remaningGasTo,
+			notify,
+			payload
+		);
+	}
+
+	/**
+	 * @dev Similar to decreaseAllowance function, but here we also consider the renewable allowance by adding recovery rate.
+	 */
+	function decreaseAllowanceRenewable(
+		address spender,
+		uint128 amount,
+		uint128 recoveryRate,
+		address remaningGasTo,
+		bool notify,
+		TvmCell payload
+	) external override {
+		uint128 currentAllowance = allowance(spender);
+		uint128 updatedAllowance = currentAllowance - amount;
+		if (updatedAllowance < 0) {
+			updatedAllowance = 0;
+		}
+		_approve(
+			spender,
+			updatedAllowance,
+			recoveryRate,
+			remaningGasTo,
+			notify,
+			payload
+		);
+	}
+
+	/**
+	 * @dev This function allows a spender to transfer tokens from the wallet to a recipient wallet.
+	 * The function first checks that the amount to be transferred is less than or equal to the wallet balance and the remaining allowance.
+	 * Then, it reduces the wallet's balance by the amount to be transferred and the allowance of the spender.
+	 * If a wallet needs to be deployed, it deploys the wallet; else, it gets the recipient wallet's address.
+	 * Finally, it calls the acceptTransfer function on the recipient wallet.
+	 */
+	function transferFrom(
+		uint128 amount,
+		uint128 deployWalletValue,
+		address remainingGasTo,
+		bool notify,
+		TvmCell payload
+	) external override onlySpender {
+		require(amount > 0, TokenErrors.WRONG_AMOUNT);
+		require(amount <= balance_, TokenErrors.NOT_ENOUGH_BALANCE);
+		uint128 remainingAllowance = _remainingAllowance(msg.sender);
+		require(
+			remainingAllowance >= amount,
+			TokenErrors.INSUFFICIENT_RENEWABLE_ALLOWANCE
+		);
+
+		tvm.rawReserve(_reserve(), 0);
+		uint128 updatedAllowance = remainingAllowance - amount;
+		if (updatedAllowance == 0 && allowance_[msg.sender].recoveryRate == 0) {
+			delete allowance_[msg.sender];
+		} else {
+			if (remainingAllowance != MAX_TOKEN_AMOUNT) {
+				allowance_[msg.sender].remaining = updatedAllowance;
+				allowance_[msg.sender].lastUpdated = uint64(block.timestamp);
+			}
+		}
+
+		TvmCell stateInit = _buildWalletInitData(msg.sender);
+
+		address recipientWallet;
+
+		if (deployWalletValue > 0) {
+			recipientWallet = _deployWallet(
+				stateInit,
+				deployWalletValue,
+				remainingGasTo
+			);
+		} else {
+			recipientWallet = address(tvm.hash(stateInit));
+		}
+
+		balance_ -= amount;
+
+		ITokenWallet(recipientWallet).acceptTransfer{
+			value: 0,
+			flag: TokenMsgFlag.ALL_NOT_RESERVED,
+			bounce: true
+		}(amount, owner_, remainingGasTo, notify, payload);
+	}
+
+	/**
+	 * @dev Getter function that returns the remaining allowance for a spender.
+	 */
+	function allowance(
+		address spender
+	) public override responsible returns (uint128 remaining) {
+		remaining = _remainingAllowance(spender);
+	}
+
+	/**
+	 * @dev Getter function that returns the maximum allowable amount and recovery rate for a spender.
+	 */
+	function allowanceRenewable(
+		address spender
+	) external override responsible returns (uint128 amount, uint128 recoveryRate) {
+		amount = allowance_[spender].maxAmount;
+		recoveryRate = allowance_[spender].recoveryRate;
+	}
+
+	/**
+	 * @dev Internal function that computes and returns the remaining allowance of a given spender.
+	 * The remaining allowance is calculated as the sum of the previously remaining allowance and the allowance recovered since the last update.
+	 * The allowance recovered is computed as the product of the recovery rate and the time elapsed since the last update.
+	 * However, the remaining allowance returned cannot exceed the maximum allowance set for the spender.
+	 *
+	 * @param spender The address of the spender.
+	 * @return remaining The remaining allowance of the spender.
+	 */
+	function _remainingAllowance(
+		address spender
+	) internal view returns (uint128) {
+		RenewableAllowance a = allowance_[spender];
+		uint128 recovered = a.recoveryRate * (block.timestamp - a.lastUpdated);
+		uint128 rAllowance = a.remaining + recovered;
+		return rAllowance > a.maxAmount ? a.maxAmount : rAllowance;
+	}
+
+	/**
+	 * @dev Function to approve a spender to spend tokens on the owner's behalf.
+	 * It first checks if the recoveryRate is less than the value to prevent overflow.
+	 * Then, if the value is 0, it removes the allowance.
+	 * If not, it sets the allowance to the RenewableAllowance struct.
+	 * Finally, if the notify flag is true, it calls the onAcceptTokensAllowance function on the spender.
+	 */
+	function _approve(
+		address spender,
+		uint128 value,
+		uint128 recoveryRate,
+		address remainingGasTo,
+		bool notify,
+		TvmCell payload
+	) internal {
+		require(
+			recoveryRate < value,
+			TokenErrors.APPROVE_RECOVERY_RATE_EXCEEDED
+		);
+		tvm.rawReserve(_reserve(), 0);
+		if (value == 0) {
+			delete allowance_[spender];
+		} else {
+			allowance_[spender] = RenewableAllowance({
+				maxAmount: value,
+				remaining: value,
+				recoveryRate: recoveryRate,
+				lastUpdated: block.timestamp
+			});
+		}
+		if (notify) {
+			IAcceptTokensAllowanceCallback(spender).onAcceptTokensAllowance{
+				value: 0,
+				flag: TokenMsgFlag.ALL_NOT_RESERVED +
+					TokenMsgFlag.IGNORE_ERRORS,
+				bounce: false
+			}(
+				root_,
+				value,
+				recoveryRate,
+				msg.sender, // owner
+				remainingGasTo,
+				payload
+			);
+		} else {
+			remainingGasTo.transfer({
+				value: 0,
+				flag: TokenMsgFlag.ALL_NOT_RESERVED +
+					TokenMsgFlag.IGNORE_ERRORS,
+				bounce: false
+			});
+		}
+	}
+}

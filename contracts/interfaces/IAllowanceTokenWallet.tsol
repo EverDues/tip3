@@ -1,0 +1,119 @@
+pragma ton-solidity >=0.57.0;
+
+import "./TIP3TokenWallet.tsol";
+import "./../additional/SID.tsol";
+
+/**
+ * @dev Interface defines a allowance functionality which is used to set a spending limit for a particular address.
+ * An owner of tokens can allow another address to spend up to a certain amount of tokens.
+ *
+ * Chain of calls:
+ *
+ *  walletOwner ->  ITokenWallet(sender).approve(...) ->
+ *                  IAcceptTokensAllowanceCallback(callbackTo).onAcceptTokensAllowance(...) -> ...
+ *
+ *  spender     ->  ITokenWallet(sender).transferFrom(...) ->
+ *                  ITokenWallet(spenderWallet).acceptTransfer(...) ->
+ *                  IAcceptTokensTransferCallback(spender).onAcceptTokensTransfer(...) -> ...
+ */
+interface IAllowanceTokenWallet is TIP3TokenWallet, SID {	
+	/**
+	 * @dev Increases the current allowance for a given spender.
+	 * @param spender The address of the spender.
+	 * @param amount The amount by which the allowance should be increased.
+	 * @param remaningGasTo Address where remaining gas should be sent.
+	 * @param notify Boolean indicating whether the operation should be notified.
+	 * @param payload Additional data that might be required.
+	 */ function increaseAllowance(
+		address spender,
+		uint128 amount,
+		address remaningGasTo,
+		bool notify,
+		TvmCell payload
+	) external;
+
+	/**
+	 * @dev Decreases the current allowance for a given spender.
+	 * @param spender The address of the spender.
+	 * @param amount The amount by which the allowance should be decreased.
+	 * @param remaningGasTo Address where remaining gas should be sent.
+	 * @param notify Boolean indicating whether the operation should be notified.
+	 * @param payload Additional data that might be required.
+	 */
+	function decreaseAllowance(
+		address spender,
+		uint128 amount,
+		address remaningGasTo,
+		bool notify,
+		TvmCell payload
+	) external;
+
+	/**
+	 * @dev Transfers tokens from the allowance of the sender.
+	 * @param amount The amount of tokens to transfer.
+	 * @param deployWalletValue The value to be sent to the new wallet deployment (if any).
+	 * @param remainingGasTo Address where remaining gas should be sent.
+	 * @param notify Boolean indicating whether the operation should be notified.
+	 * @param payload Additional data that might be required.
+	 */
+	function transferFrom(
+		uint128 amount,
+		uint128 deployWalletValue,
+		address remainingGasTo,
+		bool notify,
+		TvmCell payload
+	) external;
+
+	/**
+	 * @dev Increases the renewable allowance for a given spender.
+	 * @param spender The address of the spender.
+	 * @param amount The amount by which the allowance should be increased.
+	 * @param recoveryRate The rate at which the allowance should recover.
+	 * @param remaningGasTo Address where remaining gas should be sent.
+	 * @param notify Boolean indicating whether the operation should be notified.
+	 * @param payload Additional data that might be required.
+	 */
+	function increaseAllowanceRenewable(
+		address spender,
+		uint128 amount,
+		uint128 recoveryRate,
+		address remaningGasTo,
+		bool notify,
+		TvmCell payload
+	) external;
+
+	/**
+	 * @dev Decreases the renewable allowance for a given spender.
+	 * @param spender The address of the spender.
+	 * @param amount The amount by which the allowance should be decreased.
+	 * @param recoveryRate The rate at which the allowance should recover.
+	 * @param remaningGasTo Address where remaining gas should be sent.
+	 * @param notify Boolean indicating whether the operation should be notified.
+	 * @param payload Additional data that might be required.
+	 */
+	function decreaseAllowanceRenewable(
+		address spender,
+		uint128 amount,
+		uint128 recoveryRate,
+		address remaningGasTo,
+		bool notify,
+		TvmCell payload
+	) external;
+
+	/**
+	 * @dev Returns the current allowance for a given spender.
+	 * @param sender The address of the spender.
+	 * @return amount The current allowance of the spender.
+	 */
+	function allowance(address sender) external responsible returns (uint128 amount);
+
+	/**
+	 * @dev Returns the current renewable allowance and recovery rate for a given spender.
+	 * @param sender The address of the spender.
+	 * @return amount The current renewable allowance of the spender.
+	 * @return recoveryRate The current recovery rate of the spender.
+	 */
+	function allowanceRenewable(
+		address sender
+	) external responsible returns (uint128 amount, uint128 recoveryRate);
+}

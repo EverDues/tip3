@@ -1,0 +1,36 @@
+pragma ton-solidity >= 0.57.0;
+
+/**
+ * @dev Interface defines a callback function that can be used by a
+ * Token Wallet contract to notify the owner of the wallet when their wallet
+ * receives changes in allowance of tokens.
+ *
+ * Chain of calls:
+ *
+ *  senderWallet -> ITokenWallet(sender).approve(...) ->
+ *                  IAcceptTokensAllowanceCallback(callbackTo).onAcceptTokensAllowance(...) -> ...
+ */
+interface IAcceptTokensAllowanceCallback {
+    /**
+    * @dev onAcceptTokensAllowance is called when tokens allowance changed for the spender.
+    * This method is responsible for handling the changes of token allowance.
+    * 
+    * @param tokenRoot: The root contract address of the token.
+    * @param amount: The max amount of allowed tokens to spend.
+    * @param recoveryRate: The recovery rate associated with the transaction.
+    * @param sender: The address of the token wallet owner who initiated the approve.
+    * @param remainingGasTo: The address that remaining gas will be sent to.
+    * @param payload: Additional data attached to the transaction.
+    *
+    * NOTE: This callback function has no implementation in the main contracts.
+    */
+    function onAcceptTokensAllowance(
+        address tokenRoot,
+        uint128 amount,
+        uint128 recoveryRate,
+        address sender,
+        address remainingGasTo,
+        TvmCell payload
+    ) external;
+
+}
