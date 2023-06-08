@@ -22,4 +22,10 @@ library TokenErrors {
 
     uint16 constant BURN_DISABLED                                   = 2200;
     uint16 constant BURN_BY_ROOT_DISABLED                           = 2210;
+
+    uint16 constant NOT_SPENDER                                     = 3000;
+    uint16 constant APPROVE_RECOVERY_RATE_EXCEEDED                  = 3010;
+    uint16 constant APPROVE_REMAINING_IS_NOT_VALID                  = 3020;
+    uint16 constant INSUFFICIENT_RENEWABLE_ALLOWANCE                = 3030;
+
 }

@@ -69,6 +69,87 @@
 			]
 		},
 		{
+			"name": "increaseAllowance",
+			"inputs": [
+				{"name":"spender","type":"address"},
+				{"name":"amount","type":"uint128"},
+				{"name":"remaningGasTo","type":"address"},
+				{"name":"notify","type":"bool"},
+				{"name":"payload","type":"cell"}
+			],
+			"outputs": [
+			]
+		},
+		{
+			"name": "decreaseAllowance",
+			"inputs": [
+				{"name":"spender","type":"address"},
+				{"name":"amount","type":"uint128"},
+				{"name":"remaningGasTo","type":"address"},
+				{"name":"notify","type":"bool"},
+				{"name":"payload","type":"cell"}
+			],
+			"outputs": [
+			]
+		},
+		{
+			"name": "increaseAllowanceRenewable",
+			"inputs": [
+				{"name":"spender","type":"address"},
+				{"name":"amount","type":"uint128"},
+				{"name":"recoveryRate","type":"uint128"},
+				{"name":"remaningGasTo","type":"address"},
+				{"name":"notify","type":"bool"},
+				{"name":"payload","type":"cell"}
+			],
+			"outputs": [
+			]
+		},
+		{
+			"name": "decreaseAllowanceRenewable",
+			"inputs": [
+				{"name":"spender","type":"address"},
+				{"name":"amount","type":"uint128"},
+				{"name":"recoveryRate","type":"uint128"},
+				{"name":"remaningGasTo","type":"address"},
+				{"name":"notify","type":"bool"},
+				{"name":"payload","type":"cell"}
+			],
+			"outputs": [
+			]
+		},
+		{
+			"name": "transferFrom",
+			"inputs": [
+				{"name":"amount","type":"uint128"},
+				{"name":"deployWalletValue","type":"uint128"},
+				{"name":"remainingGasTo","type":"address"},
+				{"name":"notify","type":"bool"},
+				{"name":"payload","type":"cell"}
+			],
+			"outputs": [
+			]
+		},
+		{
+			"name": "allowance",
+			"inputs": [
+				{"name":"spender","type":"address"}
+			],
+			"outputs": [
+				{"name":"remaining","type":"uint128"}
+			]
+		},
+		{
+			"name": "allowanceRenewable",
+			"inputs": [
+				{"name":"spender","type":"address"}
+			],
+			"outputs": [
+				{"name":"amount","type":"uint128"},
+				{"name":"recoveryRate","type":"uint128"}
+			]
+		},
+		{
 			"name": "burnByRoot",
 			"inputs": [
 				{"name":"amount","type":"uint128"},
@@ -191,6 +272,14 @@
 			],
 			"outputs": [
 			]
+		},
+		{
+			"name": "allowance_",
+			"inputs": [
+			],
+			"outputs": [
+				{"components":[{"name":"maxAmount","type":"uint128"},{"name":"remaining","type":"uint128"},{"name":"recoveryRate","type":"uint128"},{"name":"lastUpdated","type":"uint64"}],"name":"allowance_","type":"map(address,tuple)"}
+			]
 		}
 	],
 	"data": [
@@ -206,6 +295,7 @@
 		{"name":"root_","type":"address"},
 		{"name":"owner_","type":"address"},
 		{"name":"balance_","type":"uint128"},
+		{"components":[{"name":"maxAmount","type":"uint128"},{"name":"remaining","type":"uint128"},{"name":"recoveryRate","type":"uint128"},{"name":"lastUpdated","type":"uint64"}],"name":"allowance_","type":"map(address,tuple)"},
 		{"name":"version_","type":"uint32"},
 		{"name":"platformCode_","type":"cell"}
 	]
